@@ -1,0 +1,24 @@
+.DS_Store
+*.pyc
+*.egg-info
+*.swp
+tags
+node_modules
+__pycache__
+
+# AI runtime files
+faiss.index
+metadata.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+env/
+venv/
+
+#Ignore cursor AI rules
+.cursor/rules/codacy.mdc
