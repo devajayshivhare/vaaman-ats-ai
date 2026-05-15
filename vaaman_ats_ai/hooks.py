@@ -84,7 +84,6 @@ app_license = "mit"
 
 # before_install = "vaaman_ats_ai.install.before_install"
 # after_install = "vaaman_ats_ai.install.after_install"
-after_install = "vaaman_ats_ai.setup.after_install"
 
 # Uninstallation
 # ------------
@@ -281,11 +280,17 @@ scheduler_events = {
 # ]
 
 fixtures = [
+    # {
+    #     "doctype": "Custom Field",
+    #     "filters": [
+    #         ["dt", "=", "Communication"],
+    #         ["fieldname", "=", "custom_processed"]
+    #     ]
+    # }
     {
         "doctype": "Custom Field",
         "filters": [
-            ["dt", "=", "Communication"],
-            ["fieldname", "=", "custom_processed"]
+            ["dt", "in", ["Communication"]]
         ]
-    }
+    },
 ]

@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-05 16:31:37.562964",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "career_email_account",
+  "ollama_host",
+  "ollama_model",
+  "ai_mode",
+  "gemini_api_key",
+  "host_name"
+ ],
+ "fields": [
+  {
+   "description": "http://localhost:11434",
+   "fieldname": "ollama_host",
+   "fieldtype": "Data",
+   "label": "Ollama Host"
+  },
+  {
+   "fieldname": "ollama_model",
+   "fieldtype": "Select",
+   "label": "Ollama Model",
+   "options": "\ngemma4:e2b"
+  },
+  {
+   "fieldname": "ai_mode",
+   "fieldtype": "Select",
+   "label": "Ai Mode",
+   "options": "\nhybrid\ngemini\nollama"
+  },
+  {
+   "fieldname": "gemini_api_key",
+   "fieldtype": "Password",
+   "label": "Gemini Api Key"
+  },
+  {
+   "description": "example: https://example.in or https://web.example.in",
+   "fieldname": "host_name",
+   "fieldtype": "Data",
+   "label": "Host Name"
+  },
+  {
+   "fieldname": "career_email_account",
+   "fieldtype": "Link",
+   "label": "Career Email Account",
+   "options": "Email Account"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-05-06 09:10:04.820302",
+ "modified_by": "Administrator",
+ "module": "Vaaman Ats Ai",
+ "name": "ATS Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

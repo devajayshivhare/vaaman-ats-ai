@@ -445,8 +445,8 @@ import frappe
 
 # ✅ Configurable via site_config.json
 # OLLAMA_MODEL = frappe.conf.get("ollama_model", "gemma4:e2b")
-OLLAMA_MODEL = frappe.conf.get("ollama_model", "gemma4:e2b")
-OLLAMA_HOST = frappe.conf.get("ollama_host", "http://localhost:11434")
+OLLAMA_MODEL = frappe.db.get_single_value("ATS Settings", "ollama_model") or frappe.conf.get("ollama_model", "gemma4:e2b")
+OLLAMA_HOST =  frappe.db.get_single_value("ATS Settings", "ollama_host") or frappe.conf.get("ollama_host", "http://localhost:11434")
 
 def get_ollama_client():
     """Initialize Ollama client with configurable host."""
@@ -670,7 +670,7 @@ Return ONLY JSON:
     
 def match_job_opening_hybrid(email_subject, email_body, job_openings, resume_data=None):
 
-    mode = frappe.conf.get("ai_mode", "hybrid")
+    mode = frappe.db.get_single_value("ATS Settings", "ai_mode") or frappe.conf.get("ai_mode", "hybrid")
 
     # ✅ Direct Gemini mode
     if mode == "gemini":

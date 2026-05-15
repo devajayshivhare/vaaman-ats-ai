@@ -62,225 +62,201 @@
 
 #     return results
 
-import frappe
 import json
+import os
+import re
+
+import frappe
 
 
-@frappe.whitelist(allow_guest=True)
-def search_candidates(filters=None):
-
-    # ✅ Parse filters
-    if isinstance(filters, str):
-        filters = json.loads(filters)
-
-    if not filters:
-        filters = {}
-
-    if "filters" in filters:
-        filters = filters["filters"]
-
-    frappe.log_error("RAW FILTERS", str(filters))
-
-    # ✅ Extract values
-    min_exp = float(filters.get("min_exp") or 0)
-    max_exp = float(filters.get("max_exp") or 100)
-
-    frappe.log_error("FINAL VALUES", f"{min_exp} → {max_exp}")
-
-    # ✅ IMPORTANT: use list filters (NOT between)
-    db_filters = [
-        ["custom_experience_years", ">=", min_exp],
-        ["custom_experience_years", "<=", max_exp]
-    ]
-    
-    # 🔥 ADD THIS LINE HERE
-    or_filters = []
-
-    # ✅ Role filter
-    if filters.get("role"):
-        db_filters.append(
-            ["custom_current_role", "like", f"%{filters.get('role')}%"]
-        )
-    # if filters.get("degree"):
-    #     db_filters.append(
-    #         ["custom_degree", "like", f"%{filters.get('degree')}%"]
-    #     )
-    
-    # ✅ Degree filter (SMART + NORMALIZED)
-
-    import re
-
-    def normalize_degree(text):
-        if not text:
-            return ""
-
-        text = text.lower()
-
-        # remove dots, special chars
-        text = re.sub(r"[^\w\s]", " ", text)
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
-
-
-    DEGREE_SYNONYMS = {
-    # 🔹 Engineering
+DEGREE_SYNONYMS = {
     "be": ["be", "b e", "b.e", "b.e.", "bachelor of engineering"],
     "btech": ["btech", "b tech", "b.tech", "bachelor of technology"],
     "me": ["me", "m e", "m.e", "master of engineering"],
-    # "me": ["me", "m e", "m.e"],
     "mtech": ["mtech", "m tech", "m.tech", "master of technology"],
-
-    # 🔹 Management
     "mba": ["mba", "master of business administration"],
     "pgdm": ["pgdm", "post graduate diploma in management"],
-
-    # 🔹 Commerce / Finance
     "bcom": ["bcom", "b com", "b.com", "bachelor of commerce"],
     "mcom": ["mcom", "m com", "m.com", "master of commerce"],
     "ca": ["ca", "chartered accountant"],
     "cs": ["cs", "company secretary"],
     "cfa": ["cfa", "chartered financial analyst"],
-
-    # 🔹 IT / Computer
     "bca": ["bca", "bachelor of computer application"],
     "mca": ["mca", "master of computer application"],
     "bsc_it": ["bsc it", "b.sc it", "bachelor of science in it"],
     "msc_it": ["msc it", "m.sc it", "master of science in it"],
-
-    # 🔹 Science
     "bsc": ["bsc", "b.sc", "bachelor of science"],
     "msc": ["msc", "m.sc", "master of science"],
-
-    # 🔹 Arts
     "ba": ["ba", "b.a", "bachelor of arts"],
     "ma": ["ma", "m.a", "master of arts"],
-
-    # 🔹 Law
     "llb": ["llb", "bachelor of law"],
     "llm": ["llm", "master of law"],
-
-    # 🔹 Medical
     "mbbs": ["mbbs", "bachelor of medicine"],
     "bds": ["bds", "bachelor of dental surgery"],
     "md": ["md", "doctor of medicine"],
-
-    # 🔹 Diploma
     "diploma": ["diploma", "polytechnic diploma"],
-
-    # 🔹 PhD
-    "phd": ["phd", "doctor of philosophy"]
+    "phd": ["phd", "doctor of philosophy"],
 }
 
 
-    degree_input = normalize_degree(filters.get("degree"))
+def _safe_float(value, default):
+    try:
+        if value in (None, ""):
+            return float(default)
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
 
-    if degree_input:
-        matched_terms = []
 
-        # find matching synonym group
-        for key, variants in DEGREE_SYNONYMS.items():
-            if degree_input in variants:
-                matched_terms = variants
-                break
+def _normalize_text(value):
+    if value is None:
+        return ""
+    return str(value).strip()
 
-        # fallback → use tokens
-        if not matched_terms:
-            matched_terms = degree_input.split()
 
-        # apply OR filters
-        for term in matched_terms:
-            or_filters.append([
-                "custom_degree",
-                "like",
-                f"%{term}%"
-            ])
-    
-    if filters.get("location"):
-        db_filters.append(
-            ["current_location", "like", f"%{filters.get('location')}%"]
+def _normalize_degree(value):
+    text = _normalize_text(value).lower()
+    text = re.sub(r"[^\w\s]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _parse_filters(raw_filters):
+    filters = raw_filters
+    for _ in range(3):
+        if isinstance(filters, str):
+            try:
+                filters = json.loads(filters)
+            except Exception:
+                return {}
+        if isinstance(filters, dict) and "filters" in filters:
+            filters = filters.get("filters")
+            continue
+        break
+    return filters if isinstance(filters, dict) else {}
+
+
+@frappe.whitelist(allow_guest=True)
+def search_candidates(filters=None):
+    try:
+        filters = _parse_filters(filters)
+
+        min_exp = _safe_float(filters.get("min_exp"), 0)
+        max_exp = _safe_float(filters.get("max_exp"), 100)
+        if min_exp > max_exp:
+            min_exp, max_exp = max_exp, min_exp
+
+        has_custom_exp = frappe.db.has_column("Job Applicant", "custom_experience_years")
+        has_custom_role = frappe.db.has_column("Job Applicant", "custom_current_role")
+        has_custom_degree = frappe.db.has_column("Job Applicant", "custom_degree")
+        has_custom_skills = frappe.db.has_column("Job Applicant", "custom_skills")
+        has_current_location = frappe.db.has_column("Job Applicant", "current_location")
+        has_custom_location = frappe.db.has_column("Job Applicant", "custom_location")
+
+        db_filters = []
+        or_filters = []
+
+        if has_custom_exp and (min_exp != 0 or max_exp != 100):
+            db_filters.append(["custom_experience_years", ">=", min_exp])
+            db_filters.append(["custom_experience_years", "<=", max_exp])
+
+        role = _normalize_text(filters.get("role"))
+        if role and has_custom_role:
+            db_filters.append(["custom_current_role", "like", f"%{role}%"])
+
+        degree_input = _normalize_degree(filters.get("degree"))
+        if degree_input and has_custom_degree:
+            matched_terms = []
+            for variants in DEGREE_SYNONYMS.values():
+                if degree_input in variants:
+                    matched_terms = variants
+                    break
+            if not matched_terms:
+                matched_terms = degree_input.split()
+            for term in matched_terms:
+                if term:
+                    or_filters.append(["custom_degree", "like", f"%{term}%"])
+
+        location = _normalize_text(filters.get("location"))
+        if location:
+            if has_current_location:
+                db_filters.append(["current_location", "like", f"%{location}%"])
+            elif has_custom_location:
+                db_filters.append(["custom_location", "like", f"%{location}%"])
+
+        skills = filters.get("skills") or []
+        if isinstance(skills, str):
+            skills = [skills]
+        if has_custom_skills:
+            for skill in skills:
+                clean_skill = _normalize_text(skill)
+                if clean_skill:
+                    db_filters.append(["custom_skills", "like", f"%{clean_skill}%"])
+
+        applicant_name = _normalize_text(filters.get("applicant_name"))
+        if applicant_name:
+            db_filters.append(["applicant_name", "like", f"%{applicant_name}%"])
+
+        fields = ["name", "applicant_name", "resume_attachment", "email_id", "phone_number", "creation"]
+        optional_fields = [
+            ("custom_experience_years", has_custom_exp),
+            ("custom_skills", has_custom_skills),
+            ("custom_current_role", has_custom_role),
+            ("custom_degree", has_custom_degree),
+            ("current_location", has_current_location),
+            ("custom_location", has_custom_location),
+        ]
+        fields.extend(field for field, exists in optional_fields if exists)
+
+        records = frappe.get_all(
+            "Job Applicant",
+            filters=db_filters,
+            or_filters=or_filters,
+            fields=fields,
+            limit_page_length=100,
+            order_by="creation desc",
         )
 
-    skills = filters.get("skills")
+        grouped = {}
+        for row in records:
+            key = row.get("email_id") or row.get("phone_number") or row.get("name")
 
-    if skills:
-        for skill in skills:
-            db_filters.append(
-                ["custom_skills", "like", f"%{skill}%"]
+            if key not in grouped:
+                grouped[key] = {
+                    "name": row.get("name"),
+                    "applicant_name": row.get("applicant_name"),
+                    "custom_experience_years": row.get("custom_experience_years"),
+                    "custom_skills": row.get("custom_skills"),
+                    "custom_current_role": row.get("custom_current_role"),
+                    "custom_degree": row.get("custom_degree"),
+                    "current_location": row.get("current_location") or row.get("custom_location"),
+                    "email_id": row.get("email_id"),
+                    "phone_number": row.get("phone_number"),
+                    "resumes": [],
+                }
+
+            raw_file_name = os.path.basename(row.get("resume_attachment") or "")
+            # frappe.log_error("RAW FILE NAME", raw_file_name)
+            # file_name_parts = raw_file_name.split("_", 1)
+            # frappe.log_error("FILE NAME PARTS", str(file_name_parts))
+            # file_name = file_name_parts[1] if len(file_name_parts) > 1 else file_name_parts[0]
+            file_name = raw_file_name
+
+            grouped[key]["resumes"].append(
+                {
+                    "resume_attachment": row.get("resume_attachment"),
+                    "creation": row.get("creation"),
+                    "name": row.get("name"),
+                    "file_name": file_name,
+                }
             )
-            
-    if filters.get("applicant_name"):
-        db_filters.append(
-            ["applicant_name", "like", f"%{filters.get('applicant_name')}%"]
+
+        return list(grouped.values())
+    except Exception:
+        frappe.log_error(
+            title="search_candidates failed",
+            message=frappe.get_traceback(),
         )
-
-    records = frappe.get_all(
-        "Job Applicant",
-        # "Resume",
-        filters=db_filters,
-        or_filters=or_filters,
-        fields=[
-            "name",
-            "applicant_name",
-            "custom_experience_years",
-            "custom_skills",
-            "custom_current_role",
-            "custom_degree",
-            "resume_attachment",
-            "custom_location",
-            "current_location",
-            "email_id",
-            "phone_number",
-            "creation"   # ✅ IMPORTANT
-        ],
-        # order_by="modified desc"
-        order_by="creation desc"
-    )
-    
-    # ✅ GROUP BY email_id
-    grouped = {}
-
-    for r in records:
-        key = r.get("email_id") or r.get("phone_number") or r.get("name")
-
-        if key not in grouped:
-            grouped[key] = {
-                "name": r["name"],
-                "applicant_name": r["applicant_name"],
-                "custom_experience_years": r["custom_experience_years"],
-                "custom_skills": r["custom_skills"],
-                "custom_current_role": r["custom_current_role"],
-                "custom_degree": r["custom_degree"],
-                "current_location": r["current_location"],
-                "email_id": r["email_id"],
-                "phone_number": r["phone_number"],
-
-                # ✅ store ALL resumes
-                "resumes": []
-            }
-
-        # grouped[key]["resumes"].append({
-        #     "resume_attachment": r["resume_attachment"],
-        #     "creation": r["creation"],
-        #     "name": r["name"]
-        # })
-        import os
-
-        file_name = os.path.basename(r["resume_attachment"] or "")
-
-        # remove hash prefix safely (only first underscore)
-        parts = file_name.split("_", 1)
-        file_name = parts[1] if len(parts) > 1 else parts[0]
-
-        grouped[key]["resumes"].append({
-            "resume_attachment": r["resume_attachment"],
-            "creation": r["creation"],
-            "name": r["name"],
-            "file_name": file_name   # ✅ NEW FIELD
-        })
-
-    # ✅ convert to list
-    return list(grouped.values())
+        return []
 # @frappe.whitelist(allow_guest=True)
 # def search_candidates(filters=None):
 #     if isinstance(filters, str):
