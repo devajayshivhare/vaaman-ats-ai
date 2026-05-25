@@ -9,7 +9,6 @@ from vaaman_ats_ai.api.resume.resume import (
 import os
 import json
 import frappe
-
 import re
 
 def clean_phone_number(phone):
