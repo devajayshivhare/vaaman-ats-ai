@@ -10,6 +10,32 @@ import os
 import json
 import frappe
 
+import re
+
+def clean_phone_number(phone):
+    if not phone:
+        return ""
+
+    # Convert list to string if AI returns array
+    if isinstance(phone, list):
+        phone = ",".join(phone)
+
+    # Split multiple numbers
+    numbers = re.split(r"[,\n;/]+", str(phone))
+
+    # Take first valid number
+    for num in numbers:
+        num = num.strip()
+
+        # Remove unwanted chars
+        num = re.sub(r"[^\d+]", "", num)
+
+        # Basic validation
+        if len(re.sub(r"\D", "", num)) >= 10:
+            return num
+
+    return ""
+
 
 @frappe.whitelist(allow_guest=True)
 def fetch_email_resumes():
@@ -254,6 +280,10 @@ def process_single_email_resume(communication_name, job_openings=None):
                 )
 
                 flat_data = flatten_resume_data(applicant_data)
+                
+                clean_phone = clean_phone_number(
+                    applicant_data.get("phone", "")
+                )
 
                 # ✅ Create Job Applicant
                 applicant = frappe.get_doc({
@@ -267,7 +297,8 @@ def process_single_email_resume(communication_name, job_openings=None):
                     ),
                     "resume_attachment": f.file_url,
                     "status": "Open",
-                    "phone_number": applicant_data.get("phone", ""),
+                    # "phone_number": applicant_data.get("phone", ""),
+                    "phone_number": clean_phone,
                     "custom_parsed_json": json.dumps(applicant_data),
                     "custom_parse_status": "Parsed",
                     "custom_experience_years": flat_data.get(
