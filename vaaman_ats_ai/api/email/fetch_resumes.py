@@ -11,9 +11,9 @@ import json
 import frappe
 import re
 
-def clean_phone_number(phone):
+def clean_phone_numbers(phone):
     if not phone:
-        return ""
+        return [], ""
 
     # Convert list to string if AI returns array
     if isinstance(phone, list):
@@ -22,7 +22,8 @@ def clean_phone_number(phone):
     # Split multiple numbers
     numbers = re.split(r"[,\n;/]+", str(phone))
 
-    # Take first valid number
+    valid_numbers = []
+
     for num in numbers:
         num = num.strip()
 
@@ -31,9 +32,13 @@ def clean_phone_number(phone):
 
         # Basic validation
         if len(re.sub(r"\D", "", num)) >= 10:
-            return num
+            if num not in valid_numbers:
+                valid_numbers.append(num)
 
-    return ""
+    first_number = valid_numbers[0] if valid_numbers else ""
+    remaining_numbers = ", ".join(valid_numbers[1:]) if len(valid_numbers) > 1 else ""
+
+    return first_number, remaining_numbers
 
 
 @frappe.whitelist(allow_guest=True)
@@ -280,7 +285,7 @@ def process_single_email_resume(communication_name, job_openings=None):
 
                 flat_data = flatten_resume_data(applicant_data)
                 
-                clean_phone = clean_phone_number(
+                clean_phone, other_phones = clean_phone_numbers(
                     applicant_data.get("phone", "")
                 )
 
@@ -298,6 +303,7 @@ def process_single_email_resume(communication_name, job_openings=None):
                     "status": "Open",
                     # "phone_number": applicant_data.get("phone", ""),
                     "phone_number": clean_phone,
+                    "custom_phone_number_2": other_phones,
                     "custom_parsed_json": json.dumps(applicant_data),
                     "custom_parse_status": "Parsed",
                     "custom_experience_years": flat_data.get(
